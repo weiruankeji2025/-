@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         威软吃瓜视频助手
 // @namespace    https://github.com/weiruankeji2025/-
-// @version      1.2.0
+// @version      1.2.1
 // @description  cgtt.me（吃瓜网）/ 91blv.com 视频自动下载助手 - 自动抓取视频资源，支持最高画质下载，自动获取视频封面，支持 AES-128 加密 HLS 流识别
 // @author       威软吃瓜视频助手
 // @match        *://cgtt.me/*
@@ -16,6 +16,8 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_notification
+// @grant        GM_setClipboard
+// @grant        unsafeWindow
 // @connect      *
 // @run-at       document-end
 // @license      MIT
@@ -33,6 +35,26 @@
 
     function log(...args) {
         console.log(`[${SCRIPT_NAME}]`, ...args);
+    }
+
+    /** 复制文本到剪贴板，优先使用 GM_setClipboard */
+    function copyText(text, successMsg) {
+        try {
+            GM_setClipboard(text);
+            showStatus(successMsg || '已复制');
+        } catch (_) {
+            try {
+                navigator.clipboard.writeText(text).then(() => showStatus(successMsg || '已复制'));
+            } catch (_2) {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                ta.remove();
+                showStatus(successMsg || '已复制');
+            }
+        }
     }
 
     function sanitizeFilename(name) {
@@ -644,7 +666,7 @@
                 <div class="wrjg-empty">点击"重新扫描"或等待自动检测</div>
             </div>
             <div class="wrjg-footer">
-                ${SCRIPT_NAME} v1.2.0 · 仅供学习交流，请尊重版权
+                ${SCRIPT_NAME} v1.2.1 · 仅供学习交流，请尊重版权
             </div>
         `;
         document.body.appendChild(panel);
@@ -757,39 +779,33 @@
             `;
         }).join('');
 
-        // 事件委托
-        body.onclick = (e) => {
-            const btn = e.target.closest('[data-action]');
-            if (!btn) return;
-            const idx = parseInt(btn.dataset.idx);
-            const action = btn.dataset.action;
-            const resource = best[idx];
-            if (!resource) return;
-            if (action === 'video') downloadVideo(resource);
-            else if (action === 'cover') downloadCover(resource);
-            else if (action === 'both') downloadBoth(resource);
-            else if (action === 'copyurl') {
-                navigator.clipboard.writeText(resource.url)
-                    .then(() => showStatus('链接已复制到剪贴板'))
-                    .catch(() => {
-                        const ta = document.createElement('textarea');
-                        ta.value = resource.url;
-                        document.body.appendChild(ta);
-                        ta.select();
-                        document.execCommand('copy');
-                        ta.remove();
-                        showStatus('链接已复制到剪贴板');
-                    });
-            } else if (action === 'ffmpeg') {
-                const box = document.getElementById(`wrjg-ffmpeg-${idx}`);
-                if (box) box.classList.toggle('show');
-                if (box && box.classList.contains('show')) {
-                    navigator.clipboard.writeText(box.textContent.trim())
-                        .then(() => showStatus('ffmpeg 命令已复制'))
-                        .catch(() => {});
+        // 逐个按钮绑定事件（比事件委托更可靠，避免沙盒环境冒泡被拦截）
+        body.querySelectorAll('[data-action]').forEach(btn => {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                const idx    = parseInt(this.dataset.idx);
+                const action = this.dataset.action;
+                const resource = best[idx];
+                if (!resource) return;
+
+                if (action === 'video') {
+                    downloadVideo(resource);
+                } else if (action === 'cover') {
+                    downloadCover(resource);
+                } else if (action === 'both') {
+                    downloadBoth(resource);
+                } else if (action === 'copyurl') {
+                    copyText(resource.url, '链接已复制到剪贴板');
+                } else if (action === 'ffmpeg') {
+                    const box = document.getElementById(`wrjg-ffmpeg-${idx}`);
+                    if (!box) return;
+                    box.classList.toggle('show');
+                    if (box.classList.contains('show')) {
+                        copyText(box.textContent.trim(), 'ffmpeg 命令已复制');
+                    }
                 }
-            }
-        };
+            });
+        });
     }
 
     // ─── MutationObserver 监听动态内容 ──────────────────────────────────────
