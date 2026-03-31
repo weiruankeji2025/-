@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         威软吃瓜视频助手
 // @namespace    https://github.com/weiruankeji2025/-
-// @version      1.1.0
-// @description  cgtt.me（吃瓜网）/ 91blv.com 视频自动下载助手 - 自动抓取视频资源，支持最高画质下载，自动获取视频封面
+// @version      1.2.0
+// @description  cgtt.me（吃瓜网）/ 91blv.com 视频自动下载助手 - 自动抓取视频资源，支持最高画质下载，自动获取视频封面，支持 AES-128 加密 HLS 流识别
 // @author       威软吃瓜视频助手
 // @match        *://cgtt.me/*
 // @match        *://www.cgtt.me/*
@@ -228,6 +228,40 @@
             background: linear-gradient(135deg, #6c5ce7, #a29bfe);
             color: #fff;
         }
+        .wrjg-btn-ffmpeg {
+            background: linear-gradient(135deg, #00b894, #00cec9);
+            color: #fff;
+        }
+        .wrjg-btn-copy {
+            background: linear-gradient(135deg, #636e72, #b2bec3);
+            color: #fff;
+        }
+        .wrjg-encrypt-badge {
+            background: #fdcb6e;
+            color: #2d3436;
+            font-size: 10px;
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+        .wrjg-seg-info {
+            color: #636e72;
+            font-size: 10px;
+        }
+        .wrjg-ffmpeg-box {
+            background: #0d0d1a;
+            border: 1px dashed #2a2a4a;
+            border-radius: 5px;
+            margin: 0 12px 8px;
+            padding: 6px 8px;
+            font-size: 10px;
+            color: #00b894;
+            font-family: monospace;
+            word-break: break-all;
+            line-height: 1.5;
+            display: none;
+        }
+        .wrjg-ffmpeg-box.show { display: block; }
         .wrjg-footer {
             background: #0f0f23;
             border-top: 1px solid #2a2a4a;
@@ -292,7 +326,9 @@
 
             // src 属性
             if (video.src && video.src.trim() !== '' && !video.src.startsWith('blob:')) {
-                result.push({ url: video.src, title, poster, quality: '', type: 'video' });
+                const res = { url: video.src, title, poster, quality: '', type: 'video', encrypted: false, encryptKey: '', segments: 0, duration: 0 };
+                result.push(res);
+                if (video.src.toLowerCase().includes('.m3u8')) setTimeout(() => parseM3u8Info(video.src, res), 0);
             }
 
             // <source> 子标签
@@ -308,7 +344,9 @@
                 const best = sources.sort((a, b) =>
                     getQualityRank(b.url, b.label) - getQualityRank(a.url, a.label)
                 )[0];
-                result.push({ url: best.url, title, poster, quality: best.label, type: 'video' });
+                const res = { url: best.url, title, poster, quality: best.label, type: 'video', encrypted: false, encryptKey: '', segments: 0, duration: 0 };
+                result.push(res);
+                if (best.url.toLowerCase().includes('.m3u8')) setTimeout(() => parseM3u8Info(best.url, res), 0);
             }
         });
         return result;
@@ -333,13 +371,23 @@
                 const url = match[1];
                 if (!seen.has(url)) {
                     seen.add(url);
-                    result.push({
+                    const isM3u8 = url.toLowerCase().includes('.m3u8');
+                    const res = {
                         url,
                         title: document.title || '视频',
                         poster: getPageCover(),
                         quality: detectQualityFromUrl(url),
-                        type: 'video'
-                    });
+                        type: 'video',
+                        encrypted: false,
+                        encryptKey: '',
+                        segments: 0,
+                        duration: 0
+                    };
+                    result.push(res);
+                    if (isM3u8) {
+                        // 异步解析加密信息
+                        setTimeout(() => parseM3u8Info(url, res), 0);
+                    }
                 }
             }
         });
@@ -399,7 +447,8 @@
     function checkAndAddUrl(url) {
         if (!url || typeof url !== 'string') return;
         const lower = url.toLowerCase();
-        if (lower.match(/\.(m3u8|mp4|flv|ts)(\?|$)/)) {
+        // 忽略单独的 .ts 分片请求（它们是 m3u8 分片，不是独立视频）
+        if (lower.match(/\.(mp4|flv)(\?|$)/)) {
             if (!foundResources.find(r => r.url === url)) {
                 foundResources.push({
                     url,
@@ -412,7 +461,69 @@
                 refreshPanel();
                 log('动态捕获资源:', url);
             }
+        } else if (lower.match(/\.m3u8(\?|$)/)) {
+            if (!foundResources.find(r => r.url === url)) {
+                const res = {
+                    url,
+                    title: document.title || '视频',
+                    poster: getPageCover(),
+                    quality: detectQualityFromUrl(url),
+                    type: 'video',
+                    source: 'network',
+                    encrypted: false,
+                    encryptKey: '',
+                    segments: 0,
+                    duration: 0
+                };
+                foundResources.push(res);
+                refreshPanel();
+                log('动态捕获 M3U8:', url);
+                // 异步解析 m3u8 获取加密信息
+                parseM3u8Info(url, res);
+            }
         }
+    }
+
+    /** 异步获取并解析 M3U8，提取 AES-128 加密信息、分片数和时长 */
+    function parseM3u8Info(m3u8Url, resObj) {
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: m3u8Url,
+            timeout: 8000,
+            onload: (resp) => {
+                const text = resp.responseText || '';
+                let encrypted = false, encryptKey = '', segments = 0, duration = 0;
+
+                text.split('\n').forEach(line => {
+                    line = line.trim();
+                    if (line.startsWith('#EXT-X-KEY')) {
+                        if (/METHOD=AES-128/i.test(line)) {
+                            encrypted = true;
+                            const m = line.match(/URI="([^"]+)"/);
+                            if (m) encryptKey = m[1];
+                        }
+                    } else if (line.startsWith('#EXTINF:')) {
+                        const d = parseFloat(line.replace('#EXTINF:', '').replace(',', ''));
+                        if (!isNaN(d)) { duration += d; segments++; }
+                    }
+                });
+
+                resObj.encrypted  = encrypted;
+                resObj.encryptKey = encryptKey;
+                resObj.segments   = segments;
+                resObj.duration   = Math.round(duration);
+                log(`M3U8 解析完成: 加密=${encrypted}, 分片=${segments}, 时长≈${resObj.duration}s`);
+                refreshPanel();
+            },
+            onerror: () => log('M3U8 解析失败:', m3u8Url)
+        });
+    }
+
+    /** 格式化秒数为 mm:ss */
+    function formatDuration(s) {
+        if (!s) return '';
+        const m = Math.floor(s / 60), sec = s % 60;
+        return `${m}:${sec.toString().padStart(2, '0')}`;
     }
 
     // ─── 主扫描函数 ──────────────────────────────────────────────────────────
@@ -533,7 +644,7 @@
                 <div class="wrjg-empty">点击"重新扫描"或等待自动检测</div>
             </div>
             <div class="wrjg-footer">
-                ${SCRIPT_NAME} v1.0.0 · 仅供学习交流，请尊重版权
+                ${SCRIPT_NAME} v1.2.0 · 仅供学习交流，请尊重版权
             </div>
         `;
         document.body.appendChild(panel);
@@ -597,12 +708,28 @@
 
             const ext = (r.url.split('?')[0].match(/\.(m3u8|mp4|flv|ts)$/i) || ['', ''])[1].toUpperCase();
             const format = ext ? `<span>${ext}</span>` : '';
+
+            const encBadge = r.encrypted
+                ? `<span class="wrjg-encrypt-badge">🔒 AES-128</span>`
+                : '';
+            const segInfo = r.segments > 0
+                ? `<span class="wrjg-seg-info">${r.segments}片${r.duration ? ' · ' + formatDuration(r.duration) : ''}</span>`
+                : '';
+
             const coverBtn = r.poster
                 ? `<button class="wrjg-btn wrjg-btn-cover" data-idx="${i}" data-action="cover">⬇ 封面</button>`
                 : '';
             const bothBtn = r.poster
                 ? `<button class="wrjg-btn wrjg-btn-all" data-idx="${i}" data-action="both">⬇ 全部</button>`
                 : '';
+            const ffmpegBtn = ext === 'M3U8'
+                ? `<button class="wrjg-btn wrjg-btn-ffmpeg" data-idx="${i}" data-action="ffmpeg">ffmpeg命令</button>`
+                : '';
+            const copyBtn = `<button class="wrjg-btn wrjg-btn-copy" data-idx="${i}" data-action="copyurl">复制链接</button>`;
+
+            // ffmpeg 命令（ffmpeg 原生支持 AES-128 HLS，会自动获取密钥解密）
+            const fname = sanitizeFilename(r.title);
+            const ffmpegCmd = `ffmpeg -i "${r.url}" -c copy "${fname}.mp4"`;
 
             return `
                 <div class="wrjg-item">
@@ -613,13 +740,18 @@
                             <div class="wrjg-meta">
                                 ${qualityBadge}
                                 ${format}
+                                ${encBadge}
+                                ${segInfo}
                             </div>
                         </div>
                     </div>
+                    <div class="wrjg-ffmpeg-box" id="wrjg-ffmpeg-${i}">${ffmpegCmd}</div>
                     <div class="wrjg-actions">
-                        <button class="wrjg-btn wrjg-btn-video" data-idx="${i}" data-action="video">⬇ 下载视频</button>
+                        <button class="wrjg-btn wrjg-btn-video" data-idx="${i}" data-action="video">⬇ 下载</button>
+                        ${ffmpegBtn}
                         ${coverBtn}
                         ${bothBtn}
+                        ${copyBtn}
                     </div>
                 </div>
             `;
@@ -636,6 +768,27 @@
             if (action === 'video') downloadVideo(resource);
             else if (action === 'cover') downloadCover(resource);
             else if (action === 'both') downloadBoth(resource);
+            else if (action === 'copyurl') {
+                navigator.clipboard.writeText(resource.url)
+                    .then(() => showStatus('链接已复制到剪贴板'))
+                    .catch(() => {
+                        const ta = document.createElement('textarea');
+                        ta.value = resource.url;
+                        document.body.appendChild(ta);
+                        ta.select();
+                        document.execCommand('copy');
+                        ta.remove();
+                        showStatus('链接已复制到剪贴板');
+                    });
+            } else if (action === 'ffmpeg') {
+                const box = document.getElementById(`wrjg-ffmpeg-${idx}`);
+                if (box) box.classList.toggle('show');
+                if (box && box.classList.contains('show')) {
+                    navigator.clipboard.writeText(box.textContent.trim())
+                        .then(() => showStatus('ffmpeg 命令已复制'))
+                        .catch(() => {});
+                }
+            }
         };
     }
 
