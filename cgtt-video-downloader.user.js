@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         威软吃瓜视频助手
 // @namespace    https://github.com/weiruankeji2025/-
-// @version      1.2.1
+// @version      1.3.0
 // @description  cgtt.me（吃瓜网）/ 91blv.com 视频自动下载助手 - 自动抓取视频资源，支持最高画质下载，自动获取视频封面，支持 AES-128 加密 HLS 流识别
 // @author       威软吃瓜视频助手
 // @match        *://cgtt.me/*
@@ -666,7 +666,7 @@
                 <div class="wrjg-empty">点击"重新扫描"或等待自动检测</div>
             </div>
             <div class="wrjg-footer">
-                ${SCRIPT_NAME} v1.2.1 · 仅供学习交流，请尊重版权
+                ${SCRIPT_NAME} v1.3.0 · 仅供学习交流，请尊重版权
             </div>
         `;
         document.body.appendChild(panel);
@@ -715,102 +715,139 @@
         if (!body) return;
 
         const best = getBestResources();
+
+        // 清空旧内容
+        while (body.firstChild) body.removeChild(body.firstChild);
+
         if (best.length === 0) {
-            body.innerHTML = '<div class="wrjg-empty">暂未发现视频资源<br>请先播放视频，或点击"重新扫描"</div>';
+            const empty = document.createElement('div');
+            empty.className = 'wrjg-empty';
+            empty.textContent = '暂未发现视频资源，请先播放视频，或点击"重新扫描"';
+            body.appendChild(empty);
             return;
         }
 
-        body.innerHTML = best.map((r, i) => {
-            const qualityBadge = r.quality
-                ? `<span class="wrjg-quality-badge">${r.quality}</span>`
-                : '';
-            const thumb = r.poster
-                ? `<img class="wrjg-thumb" src="${r.poster}" alt="封面" onerror="this.style.display='none'">`
-                : `<div class="wrjg-thumb-placeholder">🎬</div>`;
-
+        // 用 createElement 构建 DOM，直接在闭包中捕获资源对象，彻底避免 innerHTML 和索引查找问题
+        best.forEach((r) => {
             const ext = (r.url.split('?')[0].match(/\.(m3u8|mp4|flv|ts)$/i) || ['', ''])[1].toUpperCase();
-            const format = ext ? `<span>${ext}</span>` : '';
-
-            const encBadge = r.encrypted
-                ? `<span class="wrjg-encrypt-badge">🔒 AES-128</span>`
-                : '';
-            const segInfo = r.segments > 0
-                ? `<span class="wrjg-seg-info">${r.segments}片${r.duration ? ' · ' + formatDuration(r.duration) : ''}</span>`
-                : '';
-
-            const coverBtn = r.poster
-                ? `<button class="wrjg-btn wrjg-btn-cover" data-idx="${i}" data-action="cover">⬇ 封面</button>`
-                : '';
-            const bothBtn = r.poster
-                ? `<button class="wrjg-btn wrjg-btn-all" data-idx="${i}" data-action="both">⬇ 全部</button>`
-                : '';
-            const ffmpegBtn = ext === 'M3U8'
-                ? `<button class="wrjg-btn wrjg-btn-ffmpeg" data-idx="${i}" data-action="ffmpeg">ffmpeg命令</button>`
-                : '';
-            const copyBtn = `<button class="wrjg-btn wrjg-btn-copy" data-idx="${i}" data-action="copyurl">复制链接</button>`;
-
-            // ffmpeg 命令（ffmpeg 原生支持 AES-128 HLS，会自动获取密钥解密）
             const fname = sanitizeFilename(r.title);
             const ffmpegCmd = `ffmpeg -i "${r.url}" -c copy "${fname}.mp4"`;
 
-            return `
-                <div class="wrjg-item">
-                    <div class="wrjg-item-header">
-                        ${thumb}
-                        <div class="wrjg-info">
-                            <div class="wrjg-title" title="${r.title}">${r.title}</div>
-                            <div class="wrjg-meta">
-                                ${qualityBadge}
-                                ${format}
-                                ${encBadge}
-                                ${segInfo}
-                            </div>
-                        </div>
-                    </div>
-                    <div class="wrjg-ffmpeg-box" id="wrjg-ffmpeg-${i}">${ffmpegCmd}</div>
-                    <div class="wrjg-actions">
-                        <button class="wrjg-btn wrjg-btn-video" data-idx="${i}" data-action="video">⬇ 下载</button>
-                        ${ffmpegBtn}
-                        ${coverBtn}
-                        ${bothBtn}
-                        ${copyBtn}
-                    </div>
-                </div>
-            `;
-        }).join('');
+            // ── 容器 ──
+            const item = document.createElement('div');
+            item.className = 'wrjg-item';
 
-        // 逐个按钮绑定事件（比事件委托更可靠，避免沙盒环境冒泡被拦截）
-        body.querySelectorAll('[data-action]').forEach(btn => {
-            btn.addEventListener('click', function (e) {
-                e.stopPropagation();
-                const idx    = parseInt(this.dataset.idx);
-                const action = this.dataset.action;
-                const resource = best[idx];
-                if (!resource) return;
+            // ── 头部（缩略图 + 信息） ──
+            const header = document.createElement('div');
+            header.className = 'wrjg-item-header';
 
-                if (action === 'video') {
-                    downloadVideo(resource);
-                } else if (action === 'cover') {
-                    downloadCover(resource);
-                } else if (action === 'both') {
-                    downloadBoth(resource);
-                } else if (action === 'copyurl') {
-                    copyText(resource.url, '链接已复制到剪贴板');
-                } else if (action === 'ffmpeg') {
-                    const box = document.getElementById(`wrjg-ffmpeg-${idx}`);
-                    if (!box) return;
-                    box.classList.toggle('show');
-                    if (box.classList.contains('show')) {
-                        copyText(box.textContent.trim(), 'ffmpeg 命令已复制');
+            if (r.poster) {
+                const img = document.createElement('img');
+                img.className = 'wrjg-thumb';
+                img.src = r.poster;
+                img.alt = '封面';
+                img.addEventListener('error', () => { img.style.display = 'none'; });
+                header.appendChild(img);
+            } else {
+                const ph = document.createElement('div');
+                ph.className = 'wrjg-thumb-placeholder';
+                ph.textContent = '🎬';
+                header.appendChild(ph);
+            }
+
+            const info = document.createElement('div');
+            info.className = 'wrjg-info';
+
+            const titleEl = document.createElement('div');
+            titleEl.className = 'wrjg-title';
+            titleEl.textContent = r.title;
+            titleEl.title = r.title;
+            info.appendChild(titleEl);
+
+            const meta = document.createElement('div');
+            meta.className = 'wrjg-meta';
+            if (r.quality) {
+                const qb = document.createElement('span');
+                qb.className = 'wrjg-quality-badge';
+                qb.textContent = r.quality;
+                meta.appendChild(qb);
+            }
+            if (ext) {
+                const fmtEl = document.createElement('span');
+                fmtEl.textContent = ext;
+                meta.appendChild(fmtEl);
+            }
+            if (r.encrypted) {
+                const eb = document.createElement('span');
+                eb.className = 'wrjg-encrypt-badge';
+                eb.textContent = '🔒 AES-128';
+                meta.appendChild(eb);
+            }
+            if (r.segments > 0) {
+                const si = document.createElement('span');
+                si.className = 'wrjg-seg-info';
+                si.textContent = `${r.segments}片${r.duration ? ' · ' + formatDuration(r.duration) : ''}`;
+                meta.appendChild(si);
+            }
+            info.appendChild(meta);
+            header.appendChild(info);
+            item.appendChild(header);
+
+            // ── ffmpeg 命令展示框（默认隐藏） ──
+            const ffmpegBox = document.createElement('div');
+            ffmpegBox.className = 'wrjg-ffmpeg-box';
+            ffmpegBox.textContent = ffmpegCmd;
+            item.appendChild(ffmpegBox);
+
+            // ── 操作按钮区 ──
+            const actions = document.createElement('div');
+            actions.className = 'wrjg-actions';
+
+            function makeBtn(cls, label, handler) {
+                const btn = document.createElement('button');
+                btn.className = `wrjg-btn ${cls}`;
+                btn.textContent = label;
+                btn.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    handler();
+                });
+                return btn;
+            }
+
+            actions.appendChild(makeBtn('wrjg-btn-video', '⬇ 下载', () => downloadVideo(r)));
+
+            if (ext === 'M3U8') {
+                actions.appendChild(makeBtn('wrjg-btn-ffmpeg', 'ffmpeg命令', () => {
+                    ffmpegBox.classList.toggle('show');
+                    if (ffmpegBox.classList.contains('show')) {
+                        copyText(ffmpegCmd, 'ffmpeg 命令已复制');
                     }
-                }
-            });
+                }));
+            }
+
+            if (r.poster) {
+                actions.appendChild(makeBtn('wrjg-btn-cover', '⬇ 封面', () => downloadCover(r)));
+                actions.appendChild(makeBtn('wrjg-btn-all', '⬇ 全部', () => downloadBoth(r)));
+            }
+
+            actions.appendChild(makeBtn('wrjg-btn-copy', '复制链接', () => copyText(r.url, '链接已复制到剪贴板')));
+
+            item.appendChild(actions);
+            body.appendChild(item);
         });
     }
 
     // ─── MutationObserver 监听动态内容 ──────────────────────────────────────
     function watchDOMChanges() {
-        const observer = new MutationObserver(() => {
+        const panel = document.getElementById(PANEL_ID);
+        const observer = new MutationObserver((mutations) => {
+            // 忽略面板自身内部的 DOM 变化，避免 refreshPanel 触发 → observer 触发 → 死循环
+            const outsideChange = mutations.some(m =>
+                !panel || (!panel.contains(m.target) && m.target !== panel)
+            );
+            if (!outsideChange) return;
+
             const newItems = scanVideoTags();
             let added = 0;
             newItems.forEach(item => {
