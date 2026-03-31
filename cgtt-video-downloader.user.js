@@ -1,12 +1,15 @@
 // ==UserScript==
 // @name         威软吃瓜视频助手
 // @namespace    https://github.com/weiruankeji2025/-
-// @version      1.0.0
-// @description  cgtt.me（吃瓜网）视频自动下载助手 - 自动抓取视频资源，支持最高画质下载，自动获取视频封面
+// @version      1.1.0
+// @description  cgtt.me（吃瓜网）/ 91blv.com 视频自动下载助手 - 自动抓取视频资源，支持最高画质下载，自动获取视频封面
 // @author       威软吃瓜视频助手
 // @match        *://cgtt.me/*
 // @match        *://www.cgtt.me/*
 // @match        *://*.cgtt.me/*
+// @match        *://91blv.com/*
+// @match        *://www.91blv.com/*
+// @match        *://*.91blv.com/*
 // @grant        GM_download
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
