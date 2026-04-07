@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         威软吃瓜视频助手
 // @namespace    https://github.com/weiruankeji2025/-
-// @version      1.3.0
+// @version      1.4.0
 // @description  cgtt.me（吃瓜网）/ 91blv.com 视频自动下载助手 - 自动抓取视频资源，支持最高画质下载，自动获取视频封面，支持 AES-128 加密 HLS 流识别
 // @author       威软吃瓜视频助手
 // @match        *://cgtt.me/*
@@ -258,6 +258,10 @@
             background: linear-gradient(135deg, #636e72, #b2bec3);
             color: #fff;
         }
+        .wrjg-btn-online {
+            background: linear-gradient(135deg, #e17055, #fdcb6e);
+            color: #fff;
+        }
         .wrjg-encrypt-badge {
             background: #fdcb6e;
             color: #2d3436;
@@ -314,6 +318,9 @@
             width: 0%;
         }
     `);
+
+    // ─── 威软 ffmpeg 在线工具地址 ────────────────────────────────────────────
+    const FFMPEG_TOOL_URL = 'https://weiruankeji2025.github.io/ffmpeg/';
 
     // ─── 视频资源存储 ────────────────────────────────────────────────────────
     let foundResources = [];
@@ -585,6 +592,20 @@
         return Object.values(byTitle);
     }
 
+    // ─── 威软 ffmpeg 在线工具跳转 ────────────────────────────────────────────
+    /**
+     * 打开威软 ffmpeg 在线工具，将 M3U8 URL 通过 ?url= 参数传递，
+     * 工具页面读取该参数并自动填入 URL 输入框触发下载。
+     * 同时复制 URL 到剪贴板作为后备方案。
+     */
+    function openFfmpegTool(resource) {
+        const encoded = encodeURIComponent(resource.url);
+        const toolUrl = `${FFMPEG_TOOL_URL}?url=${encoded}&autostart=1`;
+        copyText(resource.url, 'M3U8 链接已复制，正在跳转工具...');
+        window.open(toolUrl, '_blank', 'noopener');
+        showStatus('已跳转到威软 ffmpeg 工具，如未自动填入请手动粘贴链接');
+    }
+
     // ─── 下载函数 ────────────────────────────────────────────────────────────
     function downloadFile(url, filename, onProgress) {
         const ext = (url.split('?')[0].match(/\.(m3u8|mp4|flv|ts|jpg|jpeg|png|webp)$/i) || ['', 'mp4'])[1];
@@ -666,7 +687,7 @@
                 <div class="wrjg-empty">点击"重新扫描"或等待自动检测</div>
             </div>
             <div class="wrjg-footer">
-                ${SCRIPT_NAME} v1.3.0 · 仅供学习交流，请尊重版权
+                ${SCRIPT_NAME} v1.4.0 · 仅供学习交流，请尊重版权
             </div>
         `;
         document.body.appendChild(panel);
@@ -818,6 +839,9 @@
             actions.appendChild(makeBtn('wrjg-btn-video', '⬇ 下载', () => downloadVideo(r)));
 
             if (ext === 'M3U8') {
+                actions.appendChild(makeBtn('wrjg-btn-online', '🔧 在线下载', () => {
+                    openFfmpegTool(r);
+                }));
                 actions.appendChild(makeBtn('wrjg-btn-ffmpeg', 'ffmpeg命令', () => {
                     ffmpegBox.classList.toggle('show');
                     if (ffmpegBox.classList.contains('show')) {
