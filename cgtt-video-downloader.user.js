@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         威软吃瓜视频助手
 // @namespace    https://github.com/weiruankeji2025/-
-// @version      1.5.0
-// @description  cgtt.me / 91blv.com 视频下载 + 18comic.vip 漫画批量下载助手 - 自动抓取视频/图片资源，支持最高画质，AES-128 HLS 解密，漫画全章下载
+// @version      1.6.0
+// @description  视频 & 漫画批量下载助手 - cgtt.me / 91blv.com / missav / jable / xvideos / pornhub 等 15+ 站点；支持 HLS/AES-128 解密、最高画质自动选取、18comic.vip 漫画全章下载
 // @author       威软吃瓜视频助手
 // @match        *://cgtt.me/*
 // @match        *://www.cgtt.me/*
@@ -16,6 +16,34 @@
 // @match        *://18comic.app/*
 // @match        *://www.18comic.app/*
 // @match        *://*.18comic.app/*
+// @match        *://missav.com/*
+// @match        *://www.missav.com/*
+// @match        *://*.missav.com/*
+// @match        *://missav.ws/*
+// @match        *://www.missav.ws/*
+// @match        *://jable.tv/*
+// @match        *://www.jable.tv/*
+// @match        *://supjav.com/*
+// @match        *://www.supjav.com/*
+// @match        *://hanime.tv/*
+// @match        *://www.hanime.tv/*
+// @match        *://hanime1.me/*
+// @match        *://www.hanime1.me/*
+// @match        *://xvideos.com/*
+// @match        *://www.xvideos.com/*
+// @match        *://xvideos2.com/*
+// @match        *://www.xvideos2.com/*
+// @match        *://pornhub.com/*
+// @match        *://www.pornhub.com/*
+// @match        *://rt.pornhub.com/*
+// @match        *://91porn.com/*
+// @match        *://www.91porn.com/*
+// @match        *://avgle.com/*
+// @match        *://www.avgle.com/*
+// @match        *://eporner.com/*
+// @match        *://www.eporner.com/*
+// @match        *://spankbang.com/*
+// @match        *://www.spankbang.com/*
 // @grant        GM_download
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
@@ -370,7 +398,7 @@
     function scanVideoTags() {
         const result = [];
         document.querySelectorAll('video').forEach((video, vi) => {
-            const title = document.title || `视频_${vi + 1}`;
+            const title = getPageTitle() || `视频_${vi + 1}`;
             const poster = video.poster || '';
 
             // src 属性
@@ -401,42 +429,78 @@
         return result;
     }
 
+    /** 提取页面标题（各站点适配） */
+    function getPageTitle() {
+        const h = location.hostname;
+        const sel = h.includes('xvideos')  ? 'h2.page-title strong, h1.page-title' :
+                    h.includes('pornhub')  ? 'h1.title span.inlineFree, h1.title' :
+                    h.includes('missav')   ? 'h1.text-base, h1' :
+                    h.includes('jable')    ? 'h4.h4, h1' :
+                    h.includes('hanime')   ? 'h1.tv-title, h1' :
+                    h.includes('spankbang')? 'h1#title, h1' :
+                    h.includes('eporner')  ? 'h1#main-video-title, h1' :
+                    null;
+        if (sel) {
+            const el = document.querySelector(sel);
+            if (el?.textContent?.trim()) return el.textContent.trim();
+        }
+        return document.title.replace(/[-|–—].*$/, '').trim() || document.title;
+    }
+
     /** 从页面 script / JSON 提取 m3u8 / mp4 链接 */
     function scanScriptContent() {
         const result = [];
         const pageText = document.documentElement.innerHTML;
+        const title = getPageTitle();
 
-        // 匹配常见视频格式 URL
+        // 通用格式 + 各站点特定格式
         const patterns = [
-            /["'](https?:\/\/[^"']+\.m3u8[^"']*)['"]/g,
-            /["'](https?:\/\/[^"']+\.mp4[^"']*)['"]/g,
-            /["'](https?:\/\/[^"']+\.flv[^"']*)['"]/g,
+            // 通用：引号包裹的 m3u8/mp4/flv
+            /["'`](https?:\/\/[^"'`\s]+\.m3u8[^"'`\s]*)["`']/g,
+            /["'`](https?:\/\/[^"'`\s]+\.mp4[^"'`\s]*)["`']/g,
+            /["'`](https?:\/\/[^"'`\s]+\.flv[^"'`\s]*)["`']/g,
+            // xvideos: html5player.setVideoHLS('url')
+            /html5player\.setVideoHLS\(['"]([^'"]+)['"]/g,
+            /html5player\.setVideoUrlHigh\(['"]([^'"]+)['"]/g,
+            /html5player\.setVideoUrlLow\(['"]([^'"]+)['"]/g,
+            // pornhub: "videoUrl":"url"
+            /"videoUrl"\s*:\s*"(https?:\/\/[^"]+\.m3u8[^"]*)"/g,
+            /"videoUrl"\s*:\s*"(https?:\/\/[^"]+\.mp4[^"]*)"/g,
+            // JW Player / video.js file 属性
+            /["']file["']\s*:\s*["'](https?:\/\/[^"']+\.(?:m3u8|mp4)[^"']*)['"]/g,
+            // source 属性
+            /["']source["']\s*:\s*["'](https?:\/\/[^"']+\.(?:m3u8|mp4)[^"']*)['"]/g,
+            // hanime / missav / jable 通用 src 格式
+            /["']src["']\s*:\s*["'](https?:\/\/[^"']+\.(?:m3u8|mp4)[^"']*)['"]/g,
         ];
 
         const seen = new Set();
+        const cover = getPageCover();
         patterns.forEach(pattern => {
             let match;
+            // 每次迭代前重置 lastIndex 防止跨次残留
+            pattern.lastIndex = 0;
             while ((match = pattern.exec(pageText)) !== null) {
                 const url = match[1];
-                if (!seen.has(url)) {
-                    seen.add(url);
-                    const isM3u8 = url.toLowerCase().includes('.m3u8');
-                    const res = {
-                        url,
-                        title: document.title || '视频',
-                        poster: getPageCover(),
-                        quality: detectQualityFromUrl(url),
-                        type: 'video',
-                        encrypted: false,
-                        encryptKey: '',
-                        segments: 0,
-                        duration: 0
-                    };
-                    result.push(res);
-                    if (isM3u8) {
-                        // 异步解析加密信息
-                        setTimeout(() => parseM3u8Info(url, res), 0);
-                    }
+                if (!url || seen.has(url)) continue;
+                // 过滤无效 URL（广告追踪、短路径等）
+                if (url.length < 20 || /analytics|tracking|pixel|beacon/i.test(url)) continue;
+                seen.add(url);
+                const isM3u8 = /\.m3u8/i.test(url);
+                const res = {
+                    url,
+                    title: title || document.title || '视频',
+                    poster: cover,
+                    quality: detectQualityFromUrl(url),
+                    type: 'video',
+                    encrypted: false,
+                    encryptKey: '',
+                    segments: 0,
+                    duration: 0
+                };
+                result.push(res);
+                if (isM3u8) {
+                    setTimeout(() => parseM3u8Info(url, res), 0);
                 }
             }
         });
@@ -684,8 +748,9 @@
     function scanAll() {
         const from_video  = scanVideoTags();
         const from_script = scanScriptContent();
+        const from_ph     = scanPornhubDefinitions();
 
-        const all = [...from_video, ...from_script];
+        const all = [...from_video, ...from_script, ...from_ph];
         const seen = new Set(foundResources.map(r => r.url));
         let added = 0;
 
@@ -709,6 +774,29 @@
 
         log(`扫描完成，新增 ${added} 个视频，共 ${foundResources.length} 个视频 + ${comicResources.length} 个漫画资源`);
         return added;
+    }
+
+    // ─── Pornhub mediaDefinitions 深度解析 ─────────────────────────────────
+    function scanPornhubDefinitions() {
+        if (!location.hostname.includes('pornhub')) return [];
+        const result = [];
+        const pageText = document.documentElement.innerHTML;
+        // flashvars_XXXXXXXX = {...}
+        const flashMatch = pageText.match(/var\s+flashvars_\w+\s*=\s*(\{[\s\S]{10,8000}?\});/);
+        if (!flashMatch) return result;
+        try {
+            const fv = JSON.parse(flashMatch[1]);
+            const title = fv.video_title || getPageTitle();
+            const cover = fv.image_url || getPageCover();
+            const defs = fv.mediaDefinitions || [];
+            defs.forEach(d => {
+                const url = d.videoUrl || d.video_url;
+                if (!url || typeof url !== 'string') return;
+                const quality = d.quality ? String(d.quality) + 'p' : detectQualityFromUrl(url);
+                result.push({ url, title, poster: cover, quality, type: 'video', encrypted: false, encryptKey: '', segments: 0, duration: 0 });
+            });
+        } catch (_) {}
+        return result;
     }
 
     // ─── 去重并按质量排序 ────────────────────────────────────────────────────
@@ -835,7 +923,7 @@
                 <div class="wrjg-empty">点击"重新扫描"或等待自动检测</div>
             </div>
             <div class="wrjg-footer">
-                ${SCRIPT_NAME} v1.5.0 · 仅供学习交流，请尊重版权
+                ${SCRIPT_NAME} v1.6.0 · 仅供学习交流，请尊重版权
             </div>
         `;
         document.body.appendChild(panel);
