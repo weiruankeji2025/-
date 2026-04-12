@@ -1,21 +1,24 @@
 // ==UserScript==
 // @name         威软吃瓜视频助手
 // @namespace    https://github.com/weiruankeji2025/-
-// @version      1.6.0
-// @description  视频 & 漫画批量下载助手 - cgtt.me / 91blv.com / missav / jable / xvideos / pornhub 等 15+ 站点；支持 HLS/AES-128 解密、最高画质自动选取、18comic.vip 漫画全章下载
+// @version      1.7.0
+// @description  视频 & 漫画批量下载助手 - 支持 65+ 站点；cgtt/91blv/missav/jable/xvideos/pornhub/xhamster/xnxx/redtube 等；HLS/AES-128 解密、最高画质自动选取、18comic 漫画全章下载
 // @author       威软吃瓜视频助手
+// ── 吃瓜 & 国内 ──────────────────────────────────────────────────────────────
 // @match        *://cgtt.me/*
 // @match        *://www.cgtt.me/*
 // @match        *://*.cgtt.me/*
 // @match        *://91blv.com/*
 // @match        *://www.91blv.com/*
 // @match        *://*.91blv.com/*
+// ── 18comic 漫画 ─────────────────────────────────────────────────────────────
 // @match        *://18comic.vip/*
 // @match        *://www.18comic.vip/*
 // @match        *://*.18comic.vip/*
 // @match        *://18comic.app/*
 // @match        *://www.18comic.app/*
 // @match        *://*.18comic.app/*
+// ── 日本 AV / JAV ────────────────────────────────────────────────────────────
 // @match        *://missav.com/*
 // @match        *://www.missav.com/*
 // @match        *://*.missav.com/*
@@ -29,21 +32,126 @@
 // @match        *://www.hanime.tv/*
 // @match        *://hanime1.me/*
 // @match        *://www.hanime1.me/*
+// @match        *://njav.tv/*
+// @match        *://www.njav.tv/*
+// @match        *://javhd.com/*
+// @match        *://www.javhd.com/*
+// @match        *://javmost.com/*
+// @match        *://www.javmost.com/*
+// @match        *://javfull.net/*
+// @match        *://www.javfull.net/*
+// @match        *://jav.guru/*
+// @match        *://www.jav.guru/*
+// @match        *://sexjav.tv/*
+// @match        *://www.sexjav.tv/*
+// @match        *://1pondo.tv/*
+// @match        *://www.1pondo.tv/*
+// @match        *://caribbeancom.com/*
+// @match        *://www.caribbeancom.com/*
+// @match        *://heyzo.com/*
+// @match        *://www.heyzo.com/*
+// @match        *://mgstage.com/*
+// @match        *://www.mgstage.com/*
+// @match        *://fc2.com/*
+// @match        *://video.fc2.com/*
+// @match        *://tokyomotion.net/*
+// @match        *://www.tokyomotion.net/*
+// @match        *://tktube.com/*
+// @match        *://www.tktube.com/*
+// @match        *://avgle.com/*
+// @match        *://www.avgle.com/*
+// ── 国内成人 ─────────────────────────────────────────────────────────────────
+// @match        *://91porn.com/*
+// @match        *://www.91porn.com/*
+// @match        *://91av.net/*
+// @match        *://www.91av.net/*
+// @match        *://sexinsex.net/*
+// @match        *://www.sexinsex.net/*
+// @match        *://sexinsex.com/*
+// @match        *://www.sexinsex.com/*
+// @match        *://sis001.com/*
+// @match        *://www.sis001.com/*
+// @match        *://hh99.me/*
+// @match        *://www.hh99.me/*
+// @match        *://hh98.me/*
+// @match        *://www.hh98.me/*
+// @match        *://99bb.com/*
+// @match        *://www.99bb.com/*
+// @match        *://5278.cc/*
+// @match        *://www.5278.cc/*
+// @match        *://33dh.com/*
+// @match        *://www.33dh.com/*
+// @match        *://mm123.club/*
+// @match        *://www.mm123.club/*
+// ── 国际大管 ─────────────────────────────────────────────────────────────────
 // @match        *://xvideos.com/*
 // @match        *://www.xvideos.com/*
 // @match        *://xvideos2.com/*
 // @match        *://www.xvideos2.com/*
+// @match        *://xvideos5.com/*
+// @match        *://www.xvideos5.com/*
 // @match        *://pornhub.com/*
 // @match        *://www.pornhub.com/*
 // @match        *://rt.pornhub.com/*
-// @match        *://91porn.com/*
-// @match        *://www.91porn.com/*
-// @match        *://avgle.com/*
-// @match        *://www.avgle.com/*
+// @match        *://xhamster.com/*
+// @match        *://www.xhamster.com/*
+// @match        *://xhamster.desi/*
+// @match        *://www.xhamster.desi/*
+// @match        *://xnxx.com/*
+// @match        *://www.xnxx.com/*
+// @match        *://redtube.com/*
+// @match        *://www.redtube.com/*
+// @match        *://tube8.com/*
+// @match        *://www.tube8.com/*
+// @match        *://youporn.com/*
+// @match        *://www.youporn.com/*
+// @match        *://beeg.com/*
+// @match        *://www.beeg.com/*
+// @match        *://tnaflix.com/*
+// @match        *://www.tnaflix.com/*
+// @match        *://nuvid.com/*
+// @match        *://www.nuvid.com/*
+// @match        *://drtuber.com/*
+// @match        *://www.drtuber.com/*
+// @match        *://empflix.com/*
+// @match        *://www.empflix.com/*
+// @match        *://hclips.com/*
+// @match        *://www.hclips.com/*
+// @match        *://txxx.com/*
+// @match        *://www.txxx.com/*
+// @match        *://pornhd.com/*
+// @match        *://www.pornhd.com/*
+// @match        *://keezmovies.com/*
+// @match        *://www.keezmovies.com/*
+// @match        *://slutload.com/*
+// @match        *://www.slutload.com/*
 // @match        *://eporner.com/*
 // @match        *://www.eporner.com/*
 // @match        *://spankbang.com/*
 // @match        *://www.spankbang.com/*
+// @match        *://mofos.com/*
+// @match        *://www.mofos.com/*
+// @match        *://brazzers.com/*
+// @match        *://www.brazzers.com/*
+// @match        *://bangbros.com/*
+// @match        *://www.bangbros.com/*
+// @match        *://realitykings.com/*
+// @match        *://www.realitykings.com/*
+// @match        *://naughtyamerica.com/*
+// @match        *://www.naughtyamerica.com/*
+// ── 直播 ─────────────────────────────────────────────────────────────────────
+// @match        *://chaturbate.com/*
+// @match        *://www.chaturbate.com/*
+// @match        *://myfreecams.com/*
+// @match        *://www.myfreecams.com/*
+// @match        *://bongacams.com/*
+// @match        *://www.bongacams.com/*
+// @match        *://stripchat.com/*
+// @match        *://www.stripchat.com/*
+// @match        *://cam4.com/*
+// @match        *://www.cam4.com/*
+// @match        *://livejasmin.com/*
+// @match        *://www.livejasmin.com/*
 // @grant        GM_download
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
@@ -432,13 +540,27 @@
     /** 提取页面标题（各站点适配） */
     function getPageTitle() {
         const h = location.hostname;
-        const sel = h.includes('xvideos')  ? 'h2.page-title strong, h1.page-title' :
-                    h.includes('pornhub')  ? 'h1.title span.inlineFree, h1.title' :
-                    h.includes('missav')   ? 'h1.text-base, h1' :
-                    h.includes('jable')    ? 'h4.h4, h1' :
-                    h.includes('hanime')   ? 'h1.tv-title, h1' :
-                    h.includes('spankbang')? 'h1#title, h1' :
-                    h.includes('eporner')  ? 'h1#main-video-title, h1' :
+        const sel = h.includes('xvideos')    ? 'h2.page-title strong, h1.page-title' :
+                    h.includes('pornhub')    ? 'h1.title span.inlineFree, h1.title' :
+                    h.includes('missav')     ? 'h1.text-base, h1' :
+                    h.includes('jable')      ? 'h4.h4, h1' :
+                    h.includes('hanime')     ? 'h1.tv-title, h1' :
+                    h.includes('spankbang')  ? 'h1#title, h1' :
+                    h.includes('eporner')    ? 'h1#main-video-title, h1' :
+                    h.includes('xhamster')   ? 'h1.video-title__title, h1' :
+                    h.includes('xnxx')       ? 'h2.page-title p, h1.page-title' :
+                    h.includes('redtube')    ? 'h1.video_title_container, h1' :
+                    h.includes('tube8')      ? 'h1.headline, h1' :
+                    h.includes('youporn')    ? 'h1.headline, h1' :
+                    h.includes('beeg')       ? 'h1#playing-title, h1' :
+                    h.includes('chaturbate') ? 'h2#room-title, h1' :
+                    h.includes('myfreecams') ? 'h1.modelname, h1' :
+                    h.includes('tnaflix')    ? 'h1.videoTitle, h1' :
+                    h.includes('tokyomotion')? 'h3.video-title, h1' :
+                    h.includes('tktube')     ? 'h1.video-title, h1' :
+                    h.includes('txxx')       ? 'h1.item-title, h1' :
+                    h.includes('hclips')     ? 'h1.video-title, h1' :
+                    h.includes('drtuber')    ? 'h1.video-title, h1' :
                     null;
         if (sel) {
             const el = document.querySelector(sel);
@@ -472,6 +594,17 @@
             /["']source["']\s*:\s*["'](https?:\/\/[^"']+\.(?:m3u8|mp4)[^"']*)['"]/g,
             // hanime / missav / jable 通用 src 格式
             /["']src["']\s*:\s*["'](https?:\/\/[^"']+\.(?:m3u8|mp4)[^"']*)['"]/g,
+            // xhamster: window.initials JSON 含 hlsMasterUrl / url
+            /"hlsMasterUrl"\s*:\s*"(https?:\/\/[^"]+\.m3u8[^"]*)"/g,
+            /"hlsUrl"\s*:\s*"(https?:\/\/[^"]+\.m3u8[^"]*)"/g,
+            // redtube / tube8 / youporn (MindGeek 系列)
+            /"videoUrl"\s*:\s*"(https?:\/\/[^"]+\.(?:m3u8|mp4)[^"]*)"/g,
+            /clipURL\s*=\s*["'](https?:\/\/[^"']+\.(?:m3u8|mp4)[^"']*)['"]/g,
+            // beeg / tnaflix / txxx
+            /"(https?:\/\/[^"]+\.m3u8[^"]*)"\s*,\s*"hls"/g,
+            /videoLink\s*=\s*["'](https?:\/\/[^"']+\.(?:m3u8|mp4)[^"']*)['"]/g,
+            // tokyomotion / tktube (xvideos 系)
+            /html5player\.setVideoUrlHD\(['"]([^'"]+)['"]/g,
         ];
 
         const seen = new Set();
@@ -923,7 +1056,7 @@
                 <div class="wrjg-empty">点击"重新扫描"或等待自动检测</div>
             </div>
             <div class="wrjg-footer">
-                ${SCRIPT_NAME} v1.6.0 · 仅供学习交流，请尊重版权
+                ${SCRIPT_NAME} v1.7.0 · 仅供学习交流，请尊重版权
             </div>
         `;
         document.body.appendChild(panel);
