@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         威软吃瓜视频助手
 // @namespace    https://github.com/weiruankeji2025/-
-// @version      1.4.0
-// @description  cgtt.me（吃瓜网）/ 91blv.com 视频自动下载助手 - 自动抓取视频资源，支持最高画质下载，自动获取视频封面，支持 AES-128 加密 HLS 流识别
+// @version      1.5.0
+// @description  cgtt.me / 91blv.com 视频下载 + 18comic.vip 漫画批量下载助手 - 自动抓取视频/图片资源，支持最高画质，AES-128 HLS 解密，漫画全章下载
 // @author       威软吃瓜视频助手
 // @match        *://cgtt.me/*
 // @match        *://www.cgtt.me/*
@@ -10,6 +10,12 @@
 // @match        *://91blv.com/*
 // @match        *://www.91blv.com/*
 // @match        *://*.91blv.com/*
+// @match        *://18comic.vip/*
+// @match        *://www.18comic.vip/*
+// @match        *://*.18comic.vip/*
+// @match        *://18comic.app/*
+// @match        *://www.18comic.app/*
+// @match        *://*.18comic.app/*
 // @grant        GM_download
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
@@ -317,6 +323,17 @@
             transition: width 0.3s;
             width: 0%;
         }
+        .wrjg-btn-img-all {
+            background: linear-gradient(135deg, #00b894, #55efc4);
+            color: #fff;
+        }
+        .wrjg-section-title {
+            color: #aaa;
+            font-size: 11px;
+            padding: 4px 12px 2px;
+            border-top: 1px solid #2a2a4a;
+            margin-top: 4px;
+        }
     `);
 
     // ─── 威软 ffmpeg 在线工具地址 ────────────────────────────────────────────
@@ -324,6 +341,9 @@
 
     // ─── 视频资源存储 ────────────────────────────────────────────────────────
     let foundResources = [];
+
+    // ─── 18comic.vip 漫画资源存储 ────────────────────────────────────────────
+    let comicResources = [];
 
     // ─── 质量排序权重 ────────────────────────────────────────────────────────
     const QUALITY_RANK = {
@@ -555,6 +575,111 @@
         return `${m}:${sec.toString().padStart(2, '0')}`;
     }
 
+    // ─── 18comic.vip 漫画支持 ────────────────────────────────────────────────
+
+    const JM_IMG_SELECTORS = [
+        '.scramble-page img',
+        'img.lazy_img',
+        'img[data-original*="/media/photos/"]',
+        'img[src*="/media/photos/"]',
+        '[id^="image_"] img',
+        '[id^="image-container-"] img',
+        '#album_photo_list img',
+        '.reading-content img',
+        '.comic-page img',
+    ];
+
+    function isJMSite() {
+        return /18comic\.(vip|app|fun|club|biz|org)/.test(location.hostname);
+    }
+
+    function getJMPageType() {
+        if (/\/photo\//.test(location.pathname)) return 'photo';
+        if (/\/album\//.test(location.pathname)) return 'album';
+        return 'other';
+    }
+
+    function getImgSrc(img) {
+        return img.getAttribute('data-original') ||
+               img.getAttribute('data-src') ||
+               img.getAttribute('data-lazy') ||
+               img.getAttribute('data-url') ||
+               (img.src && !img.src.startsWith('data:') && !/placeholder|blank|1x1|\.gif$/i.test(img.src) ? img.src : '') ||
+               '';
+    }
+
+    function scanComicImages() {
+        if (!isJMSite()) return null;
+        const pageType = getJMPageType();
+        const title = (document.querySelector('h1, .album-title, title')?.textContent || document.title)
+            .replace(/[-|].*$/, '').trim();
+        const cover = getPageCover();
+
+        if (pageType === 'photo') {
+            const seen = new Set();
+            const images = [];
+            JM_IMG_SELECTORS.forEach(sel => {
+                try {
+                    document.querySelectorAll(sel).forEach(img => {
+                        const src = getImgSrc(img);
+                        if (src && !seen.has(src) && /\.(jpe?g|png|webp)(\?|$)/i.test(src)) {
+                            seen.add(src);
+                            images.push({ url: src, index: images.length });
+                        }
+                    });
+                } catch (_) {}
+            });
+            if (images.length === 0) return null;
+            return {
+                type: 'comic-chapter',
+                title,
+                poster: cover || images[0].url,
+                url: location.href,
+                images,
+                imageCount: images.length,
+            };
+        }
+
+        if (pageType === 'album' && cover) {
+            return {
+                type: 'comic-album',
+                title,
+                poster: cover,
+                url: location.href,
+                images: [{ url: cover, index: 0 }],
+                imageCount: 1,
+            };
+        }
+        return null;
+    }
+
+    async function downloadComicChapter(resource) {
+        const { images, title } = resource;
+        showStatus(`开始下载，共 ${images.length} 张...`);
+        const bar = document.getElementById('wrjg-progress-bar');
+        const wrap = document.getElementById('wrjg-progress-wrap');
+        if (wrap) wrap.style.display = 'block';
+
+        for (let i = 0; i < images.length; i++) {
+            const img = images[i];
+            const num = String(i + 1).padStart(3, '0');
+            const ext = (img.url.split('?')[0].match(/\.(jpe?g|png|webp)$/i) || ['', 'jpg'])[1];
+            const filename = `${sanitizeFilename(title)}_${num}.${ext}`;
+            if (typeof GM_download !== 'undefined') {
+                GM_download({ url: img.url, name: filename,
+                    onerror: () => downloadFallback(img.url, filename) });
+            } else {
+                downloadFallback(img.url, filename);
+            }
+            const pct = Math.round((i + 1) / images.length * 100);
+            if (bar) bar.style.width = pct + '%';
+            showStatus(`下载进度: ${i + 1} / ${images.length}`);
+            if (i < images.length - 1) await new Promise(r => setTimeout(r, 350));
+        }
+        if (wrap) wrap.style.display = 'none';
+        showStatus(`✓ 全部 ${images.length} 张已触发下载`);
+    }
+
     // ─── 主扫描函数 ──────────────────────────────────────────────────────────
     function scanAll() {
         const from_video  = scanVideoTags();
@@ -572,7 +697,17 @@
             }
         });
 
-        log(`扫描完成，新增 ${added} 个，共 ${foundResources.length} 个资源`);
+        // 18comic.vip 漫画扫描
+        if (isJMSite()) {
+            comicResources = [];
+            const cr = scanComicImages();
+            if (cr) {
+                comicResources.push(cr);
+                log(`漫画扫描完成: ${cr.imageCount} 张图片`);
+            }
+        }
+
+        log(`扫描完成，新增 ${added} 个视频，共 ${foundResources.length} 个视频 + ${comicResources.length} 个漫画资源`);
         return added;
     }
 
@@ -665,6 +800,19 @@
         }
     }
 
+    // ─── 通用按钮构造 ────────────────────────────────────────────────────────
+    function makeBtn(cls, label, handler) {
+        const btn = document.createElement('button');
+        btn.className = `wrjg-btn ${cls}`;
+        btn.textContent = label;
+        btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            e.preventDefault();
+            handler();
+        });
+        return btn;
+    }
+
     // ─── 面板 UI ─────────────────────────────────────────────────────────────
     function createPanel() {
         if (document.getElementById(PANEL_ID)) return;
@@ -687,7 +835,7 @@
                 <div class="wrjg-empty">点击"重新扫描"或等待自动检测</div>
             </div>
             <div class="wrjg-footer">
-                ${SCRIPT_NAME} v1.4.0 · 仅供学习交流，请尊重版权
+                ${SCRIPT_NAME} v1.5.0 · 仅供学习交流，请尊重版权
             </div>
         `;
         document.body.appendChild(panel);
@@ -695,11 +843,18 @@
         document.getElementById('wrjg-rescan').addEventListener('click', () => {
             showStatus('正在扫描...');
             setTimeout(() => {
-                const added = scanAll();
+                scanAll();
                 refreshPanel();
-                showStatus(foundResources.length > 0
-                    ? `共发现 ${foundResources.length} 个视频资源`
-                    : '未发现视频资源，请播放视频后重试');
+                if (isJMSite()) {
+                    const total = comicResources.reduce((s, r) => s + r.imageCount, 0);
+                    showStatus(total > 0
+                        ? `发现漫画图片 ${total} 张`
+                        : '未发现图片，请等待页面加载完成');
+                } else {
+                    showStatus(foundResources.length > 0
+                        ? `共发现 ${foundResources.length} 个视频资源`
+                        : '未发现视频资源，请播放视频后重试');
+                }
             }, 300);
         });
     }
@@ -708,7 +863,7 @@
         if (document.getElementById(BTN_ID)) return;
         const btn = document.createElement('button');
         btn.id = BTN_ID;
-        btn.textContent = '🎬 视频下载';
+        btn.textContent = isJMSite() ? '📚 漫画下载' : '🎬 视频下载';
         btn.addEventListener('click', togglePanel);
         document.body.appendChild(btn);
     }
@@ -718,10 +873,15 @@
         if (!panel) return;
         panel.classList.toggle('visible');
         if (panel.classList.contains('visible')) {
-            if (foundResources.length === 0) {
-                const added = scanAll();
+            if (foundResources.length === 0 && comicResources.length === 0) {
+                scanAll();
                 refreshPanel();
-                showStatus(added > 0 ? `发现 ${added} 个视频资源` : '等待视频加载...');
+                if (isJMSite()) {
+                    const total = comicResources.reduce((s, r) => s + r.imageCount, 0);
+                    showStatus(total > 0 ? `发现 ${total} 张漫画图片` : '等待图片加载...');
+                } else {
+                    showStatus(foundResources.length > 0 ? `发现 ${foundResources.length} 个视频资源` : '等待视频加载...');
+                }
             }
         }
     }
@@ -740,10 +900,12 @@
         // 清空旧内容
         while (body.firstChild) body.removeChild(body.firstChild);
 
-        if (best.length === 0) {
+        if (best.length === 0 && comicResources.length === 0) {
             const empty = document.createElement('div');
             empty.className = 'wrjg-empty';
-            empty.textContent = '暂未发现视频资源，请先播放视频，或点击"重新扫描"';
+            empty.textContent = isJMSite()
+                ? '暂未发现图片，请等待页面加载完成后点击"重新扫描"'
+                : '暂未发现视频资源，请先播放视频，或点击"重新扫描"';
             body.appendChild(empty);
             return;
         }
@@ -824,18 +986,6 @@
             const actions = document.createElement('div');
             actions.className = 'wrjg-actions';
 
-            function makeBtn(cls, label, handler) {
-                const btn = document.createElement('button');
-                btn.className = `wrjg-btn ${cls}`;
-                btn.textContent = label;
-                btn.addEventListener('click', function (e) {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    handler();
-                });
-                return btn;
-            }
-
             actions.appendChild(makeBtn('wrjg-btn-video', '⬇ 下载', () => downloadVideo(r)));
 
             if (ext === 'M3U8') {
@@ -860,6 +1010,70 @@
             item.appendChild(actions);
             body.appendChild(item);
         });
+
+        // ── 18comic.vip 漫画资源 ──
+        if (comicResources.length > 0) {
+            if (best.length > 0) {
+                const sep = document.createElement('div');
+                sep.className = 'wrjg-section-title';
+                sep.textContent = '── 漫画图片 ──';
+                body.appendChild(sep);
+            }
+            comicResources.forEach(cr => {
+                const item = document.createElement('div');
+                item.className = 'wrjg-item';
+
+                const header = document.createElement('div');
+                header.className = 'wrjg-item-header';
+
+                if (cr.poster) {
+                    const img = document.createElement('img');
+                    img.className = 'wrjg-thumb';
+                    img.src = cr.poster;
+                    img.alt = '封面';
+                    img.addEventListener('error', () => { img.style.display = 'none'; });
+                    header.appendChild(img);
+                } else {
+                    const ph = document.createElement('div');
+                    ph.className = 'wrjg-thumb-placeholder';
+                    ph.textContent = '📚';
+                    header.appendChild(ph);
+                }
+
+                const info = document.createElement('div');
+                info.className = 'wrjg-info';
+                const titleEl = document.createElement('div');
+                titleEl.className = 'wrjg-title';
+                titleEl.textContent = cr.title;
+                titleEl.title = cr.title;
+                info.appendChild(titleEl);
+
+                const meta = document.createElement('div');
+                meta.className = 'wrjg-meta';
+                const typeEl = document.createElement('span');
+                typeEl.className = 'wrjg-quality-badge';
+                typeEl.style.background = '#00b894';
+                typeEl.textContent = cr.type === 'comic-chapter' ? `📖 ${cr.imageCount}张` : '📚 专辑';
+                meta.appendChild(typeEl);
+                info.appendChild(meta);
+                header.appendChild(info);
+                item.appendChild(header);
+
+                const actions = document.createElement('div');
+                actions.className = 'wrjg-actions';
+
+                if (cr.type === 'comic-chapter') {
+                    actions.appendChild(makeBtn('wrjg-btn-img-all', `⬇ 全章(${cr.imageCount}张)`, () => downloadComicChapter(cr)));
+                }
+                if (cr.poster) {
+                    actions.appendChild(makeBtn('wrjg-btn-cover', '⬇ 封面', () => downloadFile(cr.poster, sanitizeFilename(cr.title) + '_封面')));
+                }
+                actions.appendChild(makeBtn('wrjg-btn-copy', '复制链接', () => copyText(cr.url, '链接已复制')));
+
+                item.appendChild(actions);
+                body.appendChild(item);
+            });
+        }
     }
 
     // ─── MutationObserver 监听动态内容 ──────────────────────────────────────
@@ -872,17 +1086,30 @@
             );
             if (!outsideChange) return;
 
-            const newItems = scanVideoTags();
-            let added = 0;
-            newItems.forEach(item => {
-                if (!foundResources.find(r => r.url === item.url)) {
-                    foundResources.push(item);
-                    added++;
+            let changed = false;
+            if (isJMSite()) {
+                const cr = scanComicImages();
+                if (cr && cr.imageCount > (comicResources[0]?.imageCount || 0)) {
+                    comicResources = [cr];
+                    changed = true;
                 }
-            });
-            if (added > 0) {
+            } else {
+                const newItems = scanVideoTags();
+                newItems.forEach(item => {
+                    if (!foundResources.find(r => r.url === item.url)) {
+                        foundResources.push(item);
+                        changed = true;
+                    }
+                });
+            }
+            if (changed) {
                 refreshPanel();
-                showStatus(`自动发现新资源，共 ${foundResources.length} 个`);
+                if (isJMSite()) {
+                    const total = comicResources.reduce((s, r) => s + r.imageCount, 0);
+                    showStatus(`自动发现图片，共 ${total} 张`);
+                } else {
+                    showStatus(`自动发现新资源，共 ${foundResources.length} 个`);
+                }
             }
         });
         observer.observe(document.body, { childList: true, subtree: true });
@@ -899,10 +1126,16 @@
         createToggleButton();
         watchDOMChanges();
 
-        // 延迟首次扫描，等待页面视频元素加载
+        // 延迟首次扫描，等待页面元素加载
         setTimeout(() => {
             scanAll();
-            if (foundResources.length > 0) {
+            if (isJMSite()) {
+                const total = comicResources.reduce((s, r) => s + r.imageCount, 0);
+                if (total > 0) {
+                    refreshPanel();
+                    showStatus(`已发现 ${total} 张漫画图片`);
+                }
+            } else if (foundResources.length > 0) {
                 refreshPanel();
                 showStatus(`已发现 ${foundResources.length} 个视频资源`);
             }
